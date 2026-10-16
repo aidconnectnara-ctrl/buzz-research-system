@@ -24,5 +24,6 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           SPREADSHEET_KEY: ${{ secrets.SPREADSHEET_KEY }}
+          GCP_SA_KEY_JSON: ${{ secrets.GCP_SA_KEY_JSON }}
         run: |
           python main.py
