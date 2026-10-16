@@ -25,5 +25,6 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           SPREADSHEET_KEY: ${{ secrets.SPREADSHEET_KEY }}
           GCP_SA_KEY_JSON: ${{ secrets.GCP_SA_KEY_JSON }}
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
         run: |
           python main.py
