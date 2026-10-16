@@ -22,14 +22,29 @@ def calculate_buzz_score(likes, comments, shares_or_reposts):
     return round(total_engagement, 2)
 
 # ---------------------------------------------------------
-# 3. Threads データ取得（プレースホルダー）
+# 3. Threads データ取得
 # ---------------------------------------------------------
-def fetch_threads_data():
-    print("--- Threadsデータ取得開始 ---")
+def fetch_threads_data(query="AI"):
+    print(f"--- Threadsデータ取得開始 (#{query}) ---")
     posts = []
+    
     if not THREADS_ACCESS_TOKEN:
         print("Threads Access Tokenが設定されていないためスキップします。")
         return posts
+    
+    # ※ Threads公式APIやスクレイピングを用いた取得ロジックをここに組み込めます。
+    # 現在はプレースホルダーとして空のリストを返します。
+    # トークンやAPI仕様に合わせてデータを取得し、以下のような形式で追加してください：
+    # posts.append({
+    #     "platform": "Threads",
+    #     "title_text": "投稿内容...",
+    #     "url": "https://www.threads.net/...",
+    #     "likes": 0,
+    #     "comments": 0,
+    #     "shares": 0,
+    #     "score": 100
+    # })
+    
     return posts
 
 # ---------------------------------------------------------
@@ -76,9 +91,9 @@ def fetch_tiktok_data(hashtag="便利グッズ"):
     return posts
 
 # ---------------------------------------------------------
-# 5. Googleスプレッドシートへの保存（サービスアカウント不要・共有リンク対応版）
+# 5. Googleスプレッドシートへの保存（プラットフォーム別対応）
 # ---------------------------------------------------------
-def save_to_spreadsheet(posts):
+def save_to_spreadsheet(posts, platform_type="TikTok"):
     if not SPREADSHEET_KEY:
         print("スプレッドシートのキー（SPREADSHEET_KEY）が設定されていません。スキップします。")
         return
@@ -86,24 +101,17 @@ def save_to_spreadsheet(posts):
     try:
         scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
         
-        # サービスアカウントのJSONがない場合は、パブリック（共有リンク）として認証なし、
-        # もしくはダミーで動かすか、gspreadの匿名/OAuthなしのアクセスを試みます。
-        # 今回は「リンクを知っている全員（編集者）」設定を活かすため、APIの制限を回避する処理を行います。
-        
-        # もしGCP_SA_KEY_JSONが設定されていない場合のフォールバック
         if 'GCP_SA_KEY_JSON' in globals() and GCP_SA_KEY_JSON:
             creds_dict = json.loads(GCP_SA_KEY_JSON)
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
             client = gspread.authorize(creds)
         else:
-            # 認証情報なしでアクセスを試みる（※共有設定が「リンクを知っている全員（編集者）」の場合に有効なオープン接続）
-            # 注意: gspreadは通常認証が必須のため、ここではAPIキーや簡易接続に切り替えます
             print("注意: サービスアカウントのキーが設定されていませんが、処理を継続します。")
-            # ※もしこの方式でエラーが出る場合は、スプレッドシートの公開権限と連携した別ライブラリ、
-            # あるいは簡易的なAPI経由での書き込みに切り替える必要があります。
             return
 
-        sheet = client.open_by_key(SPREADSHEET_KEY).worksheet("シート1")
+        # プラットフォームに応じて書き込み先のタブを切り替え
+        sheet_name = "シート1" if platform_type == "TikTok" else "スレッズ"
+        sheet = client.open_by_key(SPREADSHEET_KEY).worksheet(sheet_name)
         
         for post in posts:
             row = [
@@ -117,9 +125,10 @@ def save_to_spreadsheet(posts):
                 post["score"]
             ]
             sheet.append_row(row)
-        print("Googleスプレッドシートへの保存完了")
+        print(f"Googleスプレッドシート ({sheet_name}) への保存完了")
     except Exception as e:
-        print(f"スプレッドシート保存エラー: {e}")
+        print(f"スプレッドシート保存エラー ({platform_type}): {e}")
+
 # ---------------------------------------------------------
 # 6. Discord 通知
 # ---------------------------------------------------------
@@ -149,12 +158,14 @@ def send_discord_notification(posts):
 # メイン実行
 # ---------------------------------------------------------
 if __name__ == "__main__":
-    all_posts = []
-    
-    # TikTokデータ収集実行
+    # 1. TikTokデータ収集・保存・通知
     tiktok_posts = fetch_tiktok_data(hashtag="便利グッズ")
-    all_posts.extend(tiktok_posts)
-    
-    if all_posts:
-        save_to_spreadsheet(all_posts)
-        send_discord_notification(all_posts)
+    if tiktok_posts:
+        save_to_spreadsheet(tiktok_posts, platform_type="TikTok")
+        send_discord_notification(tiktok_posts)
+        
+    # 2. Threadsデータ収集・保存・通知
+    threads_posts = fetch_threads_data(query="AI")
+    if threads_posts:
+        save_to_spreadsheet(threads_posts, platform_type="Threads")
+        send_discord_notification(threads_posts)
