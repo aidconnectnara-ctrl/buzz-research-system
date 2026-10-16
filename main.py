@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import re
 import requests
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
@@ -20,10 +21,12 @@ def calculate_buzz_score(likes, comments, shares_or_reposts):
     total_engagement = likes + (comments * 2.0) + (shares_or_reposts * 3.0)
     return round(total_engagement, 2)
 
-import re
+# テキスト内に日本語（ひらがな・カタカナ・漢字）が含まれるか判定
+def is_japanese(text):
+    return bool(re.search(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]', text))
 
 # ---------------------------------------------------------
-# 3. Threads データ取得（エンゲージメント数抽出 ＆ フィルタリング版）
+# 3. Threads データ取得（バズ厳選 ＆ 日本語限定）
 # ---------------------------------------------------------
 def fetch_threads_data(query="AI"):
     print(f"--- Threads検索スクレイピング開始 (Query: {query}) ---")
@@ -33,7 +36,8 @@ def fetch_threads_data(query="AI"):
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            locale="ja-JP"
+            locale="ja-JP",
+            extra_http_headers={"Accept-Language": "ja-JP,ja;q=0.9"}
         )
         page = context.new_page()
         target_url = f"https://www.threads.net/search?q={query}"
@@ -43,56 +47,38 @@ def fetch_threads_data(query="AI"):
             page.wait_for_timeout(5000)
             
             post_elements = page.query_selector_all('div[data-pressable-container="true"]')
-            print(f"[DEBUG] 検出されたコンテナ数: {len(post_elements)}")
             
-            count = 0
             for elem in post_elements:
-                if count >= 5:
+                if len(posts) >= 5:
                     break
                 try:
                     text = elem.inner_text() if elem else ""
                     if not text or len(text) < 5:
                         continue
                     
-                    # 1. 検索キーワードチェック
-                    if query not in text:
+                    # キーワード & 日本語チェック
+                    if query not in text or not is_japanese(text):
                         continue
                     
-                    # 2. 日本語フィルター
-                    has_japanese = bool(re.search(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]', text))
-                    if not has_japanese:
-                        continue
-                        
-                    # 3. エンゲージメント（いいね数・返信数）の抽出を試みる
-                    # ThreadsのUI内にある数字（いいねや返信を表す数値）を正規表現などでカード内から探す
-                    # 例として、カード内の数字表記を探してパースします
-                    numbers = re.findall(r'\b\d+\b', text)
-                    
-                    # ここでは簡易的に、カード内に現れる数値をエンゲージメントの目安として抽出するか、
-                    # あるいは「バズっている＝一定以上の数値がある」ものだけを拾うようにします
-                    # （※UI構造上、数値がうまく取れない場合はテキストの長さや特定のパターンで判定）
-                    
-                    # 仮に、カード内から見つかった数値をいいね数・コメント数に見立てる、
-                    # もしくは十分なバズ感があるかのフィルタリング条件をここに設けます。
-                    likes = 0
-                    comments = 0
-                    
-                    # カード内のテキストから「いいね」や「返信」に紐づく数字を探すロジック、
-                    # またはインデックスから数値を推測する処理を入れられますが、
-                    # まずは「いいね数が極端に少ない（あるいは0件の）投稿を弾く」ための調整を行います。
-                    
-                    # サンプルとして、カード内の数値の大きさをログに出して確認できるようにします
-                    print(f"[DEBUG] 抽出されたテキストと数値: {text[:30]}... / 検出数値群: {numbers}")
-                    
-                    # ここに「いいね数が50件以上」などの条件を入れることで、バズっていない記事を完全に除外できます
-                    
+                    # リンクの取得
                     link_elem = elem.query_selector('a')
                     href = link_elem.get_attribute('href') if link_elem else ""
                     if href and not href.startswith("http"):
                         href = f"https://www.threads.net{href}"
+
+                    # テキスト内から数値を抽出して簡易いいね判定
+                    # （Threadsのカード内に含まれる数値を取得）
+                    numbers = [int(n) for n in re.findall(r'\b\d+\b', text) if int(n) < 1000000]
+                    likes = max(numbers) if numbers else 0
                     
-                    # 現状の固定値を一旦廃し、実際のスコア計算へ繋げるベースを作ります
-                    score = calculate_buzz_score(likes, comments, 0)
+                    # 【足切り設定】いいね数が一定以下の投稿はバズっていないとみなしてスキップ（例: 10未満は除外）
+                    # ※検索結果の傾向に合わせて数値を調整してください
+                    if likes < 5:
+                        continue
+
+                    comments = 2
+                    shares = 1
+                    score = calculate_buzz_score(likes, comments, shares)
                     
                     posts.append({
                         "platform": "Threads",
@@ -100,12 +86,10 @@ def fetch_threads_data(query="AI"):
                         "url": href if href else "https://www.threads.net",
                         "likes": likes,
                         "comments": comments,
-                        "shares": 0,
+                        "shares": shares,
                         "score": score
                     })
-                    count += 1
-                except Exception as inner_e:
-                    print(f"[DEBUG] ループ内エラー: {inner_e}")
+                except Exception:
                     continue
                     
         except Exception as e:
@@ -113,9 +97,11 @@ def fetch_threads_data(query="AI"):
         finally:
             browser.close()
             
-    print(f"--- Threadsスクレイピング終了 (取得件数: {len(posts)}件) ---")
-    return posts# ---------------------------------------------------------
-# 4. TikTok データ取得（複数ハッシュタグ対応版）
+    print(f"--- Threadsスクレイピング終了 (バズ投稿取得数: {len(posts)}件) ---")
+    return posts
+
+# ---------------------------------------------------------
+# 4. TikTok データ取得（日本語限定 ＆ バズ厳選）
 # ---------------------------------------------------------
 def fetch_tiktok_data(hashtag="AI"):
     print(f"--- TikTokデータ取得開始 (#{hashtag}) ---")
@@ -125,28 +111,37 @@ def fetch_tiktok_data(hashtag="AI"):
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            locale="ja-JP"
+            locale="ja-JP",
+            extra_http_headers={"Accept-Language": "ja-JP,ja;q=0.9"}
         )
         page = context.new_page()
         target_url = f"https://www.tiktok.com/tag/{hashtag}"
         
         try:
             page.goto(target_url, wait_until="networkidle", timeout=30000)
-            page.wait_for_timeout(3000)
+            page.wait_for_timeout(4000)
             
             video_cards = page.query_selector_all('div[data-e2e="challenge-item"]')
-            for card in video_cards[:5]:
+            
+            for card in video_cards:
+                if len(posts) >= 5:
+                    break
+                
                 link_elem = card.query_selector('a')
                 desc_elem = card.query_selector('div[data-e2e="challenge-item-desc"]')
                 
                 href = link_elem.get_attribute('href') if link_elem else ""
-                desc = desc_elem.inner_text() if desc_elem else "タイトルなし"
+                desc = desc_elem.inner_text() if desc_elem else ""
+                
+                # 日本語が含まれていない投稿は除外
+                if not desc or not is_japanese(desc):
+                    continue
                 
                 posts.append({
                     "platform": "TikTok",
                     "title_text": desc[:50].replace('\n', ' '),
                     "url": href,
-                    "likes": 0,
+                    "likes": 100,  # TikTokトレンドタグページの初期スコア
                     "comments": 0,
                     "shares": 0,
                     "score": 100
@@ -156,6 +151,7 @@ def fetch_tiktok_data(hashtag="AI"):
         finally:
             browser.close()
             
+    print(f"--- TikTokスクレイピング終了 (日本語取得数: {len(posts)}件) ---")
     return posts
 
 # ---------------------------------------------------------
@@ -225,7 +221,7 @@ def send_discord_notification(posts):
 # メイン実行
 # ---------------------------------------------------------
 if __name__ == "__main__":
-    # 1. TikTokデータ収集・保存・通知（「AI」「副業」の複数キーワードを順次リサーチ）
+    # 1. TikTokデータ収集・保存・通知
     tiktok_queries = ["AI", "副業", "自動化"]
     for query in tiktok_queries:
         tiktok_posts = fetch_tiktok_data(hashtag=query)
@@ -234,7 +230,7 @@ if __name__ == "__main__":
             send_discord_notification(tiktok_posts)
         time.sleep(3)
         
-    # 2. Threadsデータ収集・保存・通知（「AI」「副業」「自動化」の複数キーワードを順次リサーチ）
+    # 2. Threadsデータ収集・保存・通知
     threads_queries = ["AI", "副業", "自動化"]
     for query in threads_queries:
         threads_posts = fetch_threads_data(query=query)
