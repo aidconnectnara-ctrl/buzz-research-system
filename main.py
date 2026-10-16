@@ -23,6 +23,9 @@ def calculate_buzz_score(likes, comments, shares_or_reposts):
 # ---------------------------------------------------------
 # 3. Threads データ取得（Playwrightによるキーワード検索・日本語フィルター版）
 # ---------------------------------------------------------
+# ---------------------------------------------------------
+# 3. Threads データ取得（デバッグログ追加版）
+# ---------------------------------------------------------
 def fetch_threads_data(query="AI"):
     print(f"--- Threads検索スクレイピング開始 (Query: {query}) ---")
     posts = []
@@ -38,9 +41,11 @@ def fetch_threads_data(query="AI"):
         
         try:
             page.goto(target_url, wait_until="networkidle", timeout=30000)
-            page.wait_for_timeout(4000)
+            page.wait_for_timeout(5000) # 少し長めに待機
             
+            # ページ全体のHTMLや要素数をデバッグ出力してみる
             post_elements = page.query_selector_all('div[data-pressable-container="true"]')
+            print(f"[DEBUG] 検出されたコンテナ数: {len(post_elements)}")
             
             count = 0
             for elem in post_elements:
@@ -53,11 +58,15 @@ def fetch_threads_data(query="AI"):
                     text = text_elem.inner_text() if text_elem else ""
                     href = link_elem.get_attribute('href') if link_elem else ""
                     
+                    print(f"[DEBUG] 取得テキスト抜粋: {text[:30]}...")
+                    
                     if not text or len(text) < 5:
                         continue
                     
-                    # キーワードが含まれているものだけに絞り込み
+                    # キーワードが含まれているか（あるいはデバッグのために一旦この条件をコメントアウトして様子を見ることも可能）
                     if query not in text:
+                        # キーワードが完全一致しない場合でも、デバッグで弾かれている原因を確認するためログを出す
+                        print(f"[DEBUG] キーワード '{query}' が含まれていないためスキップします")
                         continue
                         
                     if href and not href.startswith("http"):
@@ -78,7 +87,8 @@ def fetch_threads_data(query="AI"):
                         "score": score
                     })
                     count += 1
-                except Exception:
+                except Exception as inner_e:
+                    print(f"[DEBUG] ループ内エラー: {inner_e}")
                     continue
                     
         except Exception as e:
@@ -86,6 +96,7 @@ def fetch_threads_data(query="AI"):
         finally:
             browser.close()
             
+    print(f"--- Threadsスクレイピング終了 (取得件数: {len(posts)}件) ---")
     return posts
 
 # ---------------------------------------------------------
