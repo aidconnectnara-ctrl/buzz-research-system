@@ -21,10 +21,7 @@ def calculate_buzz_score(likes, comments, shares_or_reposts):
     return round(total_engagement, 2)
 
 # ---------------------------------------------------------
-# 3. Threads データ取得（Playwrightによるキーワード検索・日本語フィルター版）
-# ---------------------------------------------------------
-# ---------------------------------------------------------
-# 3. Threads データ取得（デバッグログ追加版）
+# 3. Threads データ取得（本文抽出 ＆ 日本語フィルター・キーワード一致版）
 # ---------------------------------------------------------
 def fetch_threads_data(query="AI"):
     print(f"--- Threads検索スクレイピング開始 (Query: {query}) ---")
@@ -41,9 +38,8 @@ def fetch_threads_data(query="AI"):
         
         try:
             page.goto(target_url, wait_until="networkidle", timeout=30000)
-            page.wait_for_timeout(5000) # 少し長めに待機
+            page.wait_for_timeout(5000)
             
-            # ページ全体のHTMLや要素数をデバッグ出力してみる
             post_elements = page.query_selector_all('div[data-pressable-container="true"]')
             print(f"[DEBUG] 検出されたコンテナ数: {len(post_elements)}")
             
@@ -52,23 +48,26 @@ def fetch_threads_data(query="AI"):
                 if count >= 5:
                     break
                 try:
-                    text_elem = elem.query_selector('span')
-                    link_elem = elem.query_selector('a')
-                    
-                    text = text_elem.inner_text() if text_elem else ""
-                    href = link_elem.get_attribute('href') if link_elem else ""
-                    
-                    print(f"[DEBUG] 取得テキスト抜粋: {text[:30]}...")
+                    # カード全体のテキストを取得
+                    text = elem.inner_text() if elem else ""
                     
                     if not text or len(text) < 5:
                         continue
                     
-                    # キーワードが含まれているか（あるいはデバッグのために一旦この条件をコメントアウトして様子を見ることも可能）
+                    # 1. 検索キーワードが含まれているかチェック
                     if query not in text:
-                        # キーワードが完全一致しない場合でも、デバッグで弾かれている原因を確認するためログを出す
-                        print(f"[DEBUG] キーワード '{query}' が含まれていないためスキップします")
+                        print(f"[DEBUG] キーワード '{query}' が含まれないためスキップ")
+                        continue
+                    
+                    # 2. 日本語フィルター（ひらがな、カタカナ、漢字のいずれかが含まれているかチェック）
+                    import re
+                    has_japanese = bool(re.search(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]', text))
+                    if not has_japanese:
+                        print(f"[DEBUG] 日本語が含まれていないためスキップ: {text[:20]}...")
                         continue
                         
+                    link_elem = elem.query_selector('a')
+                    href = link_elem.get_attribute('href') if link_elem else ""
                     if href and not href.startswith("http"):
                         href = f"https://www.threads.net{href}"
                     
@@ -98,7 +97,6 @@ def fetch_threads_data(query="AI"):
             
     print(f"--- Threadsスクレイピング終了 (取得件数: {len(posts)}件) ---")
     return posts
-
 # ---------------------------------------------------------
 # 4. TikTok データ取得（複数ハッシュタグ対応版）
 # ---------------------------------------------------------
