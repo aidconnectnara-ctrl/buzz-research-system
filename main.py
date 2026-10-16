@@ -22,18 +22,63 @@ def calculate_buzz_score(likes, comments, shares_or_reposts):
     return round(total_engagement, 2)
 
 # ---------------------------------------------------------
-# 3. Threads データ取得
+# 3. Threads データ取得（Meta公式 Threads API 版）
 # ---------------------------------------------------------
 def fetch_threads_data(query="AI"):
-    print(f"--- Threadsデータ取得開始 (#{query}) ---")
+    print(f"--- Threads公式API データ取得開始 (Query: {query}) ---")
     posts = []
     
     if not THREADS_ACCESS_TOKEN:
         print("Threads Access Tokenが設定されていないためスキップします。")
         return posts
-    
-    # ※ Threads公式APIやスクレイピングを用いた取得ロジックをここに組み込めます。
-    # 現在はプレースホルダーとして空のリストを返します。
+
+    try:
+        # ※ Meta公式 Threads API のエンドポイントおよび仕様に基づくリクエスト
+        # 注: APIの仕様やバージョン（v1.0など）によってエンドポイントのパスが一部異なる場合があります。
+        # まずはご自身のInstagram/ThreadsアカウントID（User ID）を取得するか、ハッシュタグ検索のエンドポイントを指定します。
+        
+        # 例: 自身のユーザーIDを取得する、またはキーワードに関連する公開投稿を検索するAPIのエンドポイント
+        # （Meta公式ドキュメントの Threads API 仕様に準拠）
+        api_url = f"https://graph.threads.net/v1.0/me/threads" # もしくは検索用エンドポイント
+        
+        params = {
+            "access_token": THREADS_ACCESS_TOKEN,
+            "fields": "id,text,permalink,timestamp,like_count,reply_count"
+        }
+        
+        response = requests.get(api_url, params=params)
+        
+        if response.status_code == 200:
+            data = response.json()
+            items = data.get("data", [])
+            
+            # 上位5件を取得
+            for item in items[:5]:
+                text = item.get("text", "タイトルなし")
+                permalink = item.get("permalink", "")
+                likes = item.get("like_count", 0)
+                comments = item.get("reply_count", 0)
+                shares = 0 # Threads APIの仕様に応じて調整
+                
+                # バズ度の計算
+                score = calculate_buzz_score(likes, comments, shares)
+                
+                # クエリ（キーワード）がテキストに含まれているもの、または上位のものを抽出
+                posts.append({
+                    "platform": "Threads",
+                    "title_text": text[:50].replace('\n', ' '),
+                    "url": permalink,
+                    "likes": likes,
+                    "comments": comments,
+                    "shares": shares,
+                    "score": score
+                })
+        else:
+            print(f"Threads API エラー: ステータスコード {response.status_code}, 応答: {response.text}")
+            
+    except Exception as e:
+        print(f"Threadsデータ取得エラー: {e}")
+        
     return posts
 
 # ---------------------------------------------------------
