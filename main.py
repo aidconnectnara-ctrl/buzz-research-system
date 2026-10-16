@@ -34,17 +34,6 @@ def fetch_threads_data(query="AI"):
     
     # ※ Threads公式APIやスクレイピングを用いた取得ロジックをここに組み込めます。
     # 現在はプレースホルダーとして空のリストを返します。
-    # トークンやAPI仕様に合わせてデータを取得し、以下のような形式で追加してください：
-    # posts.append({
-    #     "platform": "Threads",
-    #     "title_text": "投稿内容...",
-    #     "url": "https://www.threads.net/...",
-    #     "likes": 0,
-    #     "comments": 0,
-    #     "shares": 0,
-    #     "score": 100
-    # })
-    
     return posts
 
 # ---------------------------------------------------------
@@ -109,8 +98,8 @@ def save_to_spreadsheet(posts, platform_type="TikTok"):
             print("注意: サービスアカウントのキーが設定されていませんが、処理を継続します。")
             return
 
-        # プラットフォームに応じて書き込み先のタブを切り替え
-        sheet_name = "シート1" if platform_type == "TikTok" else "スレッズ"
+        # プラットフォームに応じて書き込み先のタブを切り替え（Threadsタブに対応）
+        sheet_name = "シート1" if platform_type == "TikTok" else "Threads"
         sheet = client.open_by_key(SPREADSHEET_KEY).worksheet(sheet_name)
         
         for post in posts:
