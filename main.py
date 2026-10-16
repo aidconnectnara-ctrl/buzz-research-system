@@ -21,7 +21,7 @@ def calculate_buzz_score(likes, comments, shares_or_reposts):
     return round(total_engagement, 2)
 
 # ---------------------------------------------------------
-# 3. Threads データ取得（Playwrightによるキーワード検索スクレイピング）
+# 3. Threads データ取得（Playwrightによるキーワード検索・日本語フィルター版）
 # ---------------------------------------------------------
 def fetch_threads_data(query="AI"):
     print(f"--- Threads検索スクレイピング開始 (Query: {query}) ---")
@@ -31,10 +31,9 @@ def fetch_threads_data(query="AI"):
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            locale="ja-JP" # 日本語環境に指定
+            locale="ja-JP"
         )
         page = context.new_page()
-        
         target_url = f"https://www.threads.net/search?q={query}"
         
         try:
@@ -57,7 +56,7 @@ def fetch_threads_data(query="AI"):
                     if not text or len(text) < 5:
                         continue
                     
-                    # ★【重要】取得したテキストに検索キーワードが含まれているかチェック（外国語や無関係な投稿を除外）
+                    # キーワードが含まれているものだけに絞り込み
                     if query not in text:
                         continue
                         
@@ -88,17 +87,19 @@ def fetch_threads_data(query="AI"):
             browser.close()
             
     return posts
+
 # ---------------------------------------------------------
-# 4. TikTok データ取得（Playwrightによるトレンドスクレイピング）
+# 4. TikTok データ取得（複数ハッシュタグ対応版）
 # ---------------------------------------------------------
-def fetch_tiktok_data(hashtag="便利グッズ"):
+def fetch_tiktok_data(hashtag="AI"):
     print(f"--- TikTokデータ取得開始 (#{hashtag}) ---")
     posts = []
     
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            locale="ja-JP"
         )
         page = context.new_page()
         target_url = f"https://www.tiktok.com/tag/{hashtag}"
@@ -198,15 +199,17 @@ def send_discord_notification(posts):
 # メイン実行
 # ---------------------------------------------------------
 if __name__ == "__main__":
-    # 1. TikTokデータ収集・保存・通知
-    tiktok_posts = fetch_tiktok_data(hashtag="便利グッズ")
-    if tiktok_posts:
-        save_to_spreadsheet(tiktok_posts, platform_type="TikTok")
-        send_discord_notification(tiktok_posts)
+    # 1. TikTokデータ収集・保存・通知（「AI」「副業」の複数キーワードを順次リサーチ）
+    tiktok_queries = ["AI", "副業", "自動化"]
+    for query in tiktok_queries:
+        tiktok_posts = fetch_tiktok_data(hashtag=query)
+        if tiktok_posts:
+            save_to_spreadsheet(tiktok_posts, platform_type="TikTok")
+            send_discord_notification(tiktok_posts)
+        time.sleep(3)
         
-    # 2. Threadsデータ収集・保存・通知（「副業」「自動化」「AI」の複数キーワードを順次スクレイピング）
-    threads_queries = ["副業", "自動化", "AI"]
-    
+    # 2. Threadsデータ収集・保存・通知（「AI」「副業」「自動化」の複数キーワードを順次リサーチ）
+    threads_queries = ["AI", "副業", "自動化"]
     for query in threads_queries:
         threads_posts = fetch_threads_data(query=query)
         if threads_posts:
