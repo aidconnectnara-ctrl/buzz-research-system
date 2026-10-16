@@ -22,10 +22,10 @@ def calculate_buzz_score(likes, comments, shares_or_reposts):
     return round(total_engagement, 2)
 
 # ---------------------------------------------------------
-# 3. Threads データ取得（Meta公式 Threads API 版）
+# 3. Threads データ取得（Meta公式 Threads API キーワード検索版）
 # ---------------------------------------------------------
-def fetch_threads_data(query="AI"):
-    print(f"--- Threads公式API データ取得開始 (Query: {query}) ---")
+def fetch_threads_data(query="副業"):
+    print(f"--- Threads公式API キーワード検索開始 (Query: {query}) ---")
     posts = []
     
     if not THREADS_ACCESS_TOKEN:
@@ -33,15 +33,13 @@ def fetch_threads_data(query="AI"):
         return posts
 
     try:
-        # ※ Meta公式 Threads API のエンドポイントおよび仕様に基づくリクエスト
-        # 注: APIの仕様やバージョン（v1.0など）によってエンドポイントのパスが一部異なる場合があります。
-        # まずはご自身のInstagram/ThreadsアカウントID（User ID）を取得するか、ハッシュタグ検索のエンドポイントを指定します。
-        
-        # 例: 自身のユーザーIDを取得する、またはキーワードに関連する公開投稿を検索するAPIのエンドポイント
-        # （Meta公式ドキュメントの Threads API 仕様に準拠）
-        api_url = f"https://graph.threads.net/v1.0/me/threads" # もしくは検索用エンドポイント
+        # Threads全体のキーワード検索用エンドポイント
+        # ※APIの仕様やMeta側のアプリ権限（threads_keyword_search等）により、
+        #   ユーザーIDを挟む形式やエンドポイントのパスが異なる場合があります。
+        api_url = "https://graph.threads.net/v1.0/keyword_search"
         
         params = {
+            "q": query,
             "access_token": THREADS_ACCESS_TOKEN,
             "fields": "id,text,permalink,timestamp,like_count,reply_count"
         }
@@ -58,12 +56,11 @@ def fetch_threads_data(query="AI"):
                 permalink = item.get("permalink", "")
                 likes = item.get("like_count", 0)
                 comments = item.get("reply_count", 0)
-                shares = 0 # Threads APIの仕様に応じて調整
+                shares = 0 
                 
                 # バズ度の計算
                 score = calculate_buzz_score(likes, comments, shares)
                 
-                # クエリ（キーワード）がテキストに含まれているもの、または上位のものを抽出
                 posts.append({
                     "platform": "Threads",
                     "title_text": text[:50].replace('\n', ' '),
@@ -80,7 +77,6 @@ def fetch_threads_data(query="AI"):
         print(f"Threadsデータ取得エラー: {e}")
         
     return posts
-
 # ---------------------------------------------------------
 # 4. TikTok データ取得（Playwrightによるトレンドスクレイピング）
 # ---------------------------------------------------------
@@ -192,14 +188,18 @@ def send_discord_notification(posts):
 # メイン実行
 # ---------------------------------------------------------
 if __name__ == "__main__":
-    # 1. TikTokデータ収集・保存・通知
+    # 1. TikTokデータ収集・保存・通知（必要に応じてハッシュタグを変更）
     tiktok_posts = fetch_tiktok_data(hashtag="便利グッズ")
     if tiktok_posts:
         save_to_spreadsheet(tiktok_posts, platform_type="TikTok")
         send_discord_notification(tiktok_posts)
         
-    # 2. Threadsデータ収集・保存・通知
-    threads_posts = fetch_threads_data(query="AI")
-    if threads_posts:
-        save_to_spreadsheet(threads_posts, platform_type="Threads")
-        send_discord_notification(threads_posts)
+    # 2. Threadsデータ収集・保存・通知（複数のキーワードを順番に検索）
+    threads_queries = ["副業", "自動化", "AI"]
+    
+    for query in threads_queries:
+        threads_posts = fetch_threads_data(query=query)
+        if threads_posts:
+            save_to_spreadsheet(threads_posts, platform_type="Threads")
+            send_discord_notification(threads_posts)
+        time.sleep(2) # 連続リクエスト対策
