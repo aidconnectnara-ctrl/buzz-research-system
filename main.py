@@ -30,19 +30,17 @@ def fetch_threads_data(query="AI"):
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            locale="ja-JP" # 日本語環境に指定
         )
         page = context.new_page()
         
-        # Threadsの検索用URL構造にキーワードを当てはめる
         target_url = f"https://www.threads.net/search?q={query}"
         
         try:
             page.goto(target_url, wait_until="networkidle", timeout=30000)
-            page.wait_for_timeout(4000) # 描画待ち
+            page.wait_for_timeout(4000)
             
-            # 投稿カード要素の取得（※ThreadsのUI構造に合わせて柔軟に調整）
-            # 投稿のテキストやリンク要素をセレクタで抽出
             post_elements = page.query_selector_all('div[data-pressable-container="true"]')
             
             count = 0
@@ -58,11 +56,15 @@ def fetch_threads_data(query="AI"):
                     
                     if not text or len(text) < 5:
                         continue
+                    
+                    # ★【重要】取得したテキストに検索キーワードが含まれているかチェック（外国語や無関係な投稿を除外）
+                    if query not in text:
+                        continue
                         
                     if href and not href.startswith("http"):
                         href = f"https://www.threads.net{href}"
                     
-                    likes = 10  # スクレイピングで数値が取れない場合の初期値・仮置き
+                    likes = 10  
                     comments = 2
                     shares = 1
                     score = calculate_buzz_score(likes, comments, shares)
@@ -86,7 +88,6 @@ def fetch_threads_data(query="AI"):
             browser.close()
             
     return posts
-
 # ---------------------------------------------------------
 # 4. TikTok データ取得（Playwrightによるトレンドスクレイピング）
 # ---------------------------------------------------------
