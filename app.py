@@ -13,19 +13,43 @@ from google import genai
 # 安全なブラウザ起動関数（自動判定ロジック）
 # ---------------------------------------------------------
 def launch_safe_browser(p):
-    """
-    Streamlit Cloud環境（/usr/bin/chromium-browserが存在する環境）ではシステム版を使用し、
-    ローカルや他環境（存在しない環境）では標準のPlaywrightブラウザに自動フォールバックする
-    """
-    system_chromium_path = "/usr/bin/chromium-browser"
-    
-    if os.path.exists(system_chromium_path):
+    candidates = [
+        os.getenv("CHROMIUM_PATH"),
+        "/usr/bin/chromium",
+        "/usr/bin/chromium-browser",
+    ]
+
+    for browser_path in candidates:
+        if not browser_path:
+            continue
+
+        if not os.path.exists(browser_path):
+            continue
+
         try:
-            return p.chromium.launch(headless=True, executable_path=system_chromium_path)
+            st.info(f"Chromiumを使用します: {browser_path}")
+
+            return p.chromium.launch(
+                headless=True,
+                executable_path=browser_path,
+                args=[
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                ],
+            )
+
         except Exception as e:
-            st.warning(f"システム版Chromiumの起動に失敗したため標準に切り替えます: {e}")
-            
-    return p.chromium.launch(headless=True)
+            st.warning(
+                f"Chromiumの起動に失敗しました: {browser_path}\n\n{e}"
+            )
+
+    st.error(
+        "Chromiumが見つかりませんでした。"
+        "packages.txtにchromiumがあるか確認してください。"
+    )
+    st.stop()
+
 
 # ---------------------------------------------------------
 # ページ基本設定
