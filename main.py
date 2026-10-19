@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import datetime
 import requests
 from playwright.sync_api import sync_playwright
 import gspread
@@ -21,16 +22,12 @@ SEARCH_KEYWORDS = ["AI", "副業", "自動化"]
 # 1. Gemini APIによる投稿分析 ＆ 新規投稿案の生成関数
 # ---------------------------------------------------------
 def analyze_and_generate_post(post_text, platform="Threads", keyword="AI"):
-    """
-    Gemini APIを使って投稿を分析し、さらにその分析を基にした新しい投稿案を生成する
-    """
     if not GEMINI_API_KEY:
         print("[DEBUG Gemini] GEMINI_API_KEY が未設定のため分析をスキップします。")
         return "APIキー未設定", "APIキー未設定"
 
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
-        
         prompt = f"""
 以下の{platform}のバズ投稿を分析し、それに基づいた「新しいバズ投稿案」を日本語で作成してください。
 
@@ -48,21 +45,16 @@ def analyze_and_generate_post(post_text, platform="Threads", keyword="AI"):
 ・本文・構成: 
 ・アクション促進（保存・コメント誘導など）: 
 """
-        
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=prompt,
         )
-        
         result_text = response.text.strip()
-        
-        # 分析結果と新規投稿案を分割しやすくするための処理（あるいは全体を格納）
         return result_text, result_text
     except Exception as e:
         print(f"[DEBUG Gemini] 分析・生成エラー: {e}")
         return "分析エラー発生", "生成エラー発生"
 
-# 日本語判定ヘルパー
 def is_japanese(text):
     return bool(re.search(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]', text))
 
@@ -89,7 +81,6 @@ def save_to_google_sheet(data_list, sheet_name="シート1"):
             worksheet.append_row(["日時", "プラットフォーム", "キーワード", "タイトル/本文", "URL", "バズスコア", "Gemini分析＆新規投稿案"])
 
         rows = []
-        import datetime
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         for item in data_list:
@@ -100,7 +91,7 @@ def save_to_google_sheet(data_list, sheet_name="シート1"):
                 item.get("title_text", ""),
                 item.get("url", ""),
                 item.get("score", 0),
-                item.get("analysis", "")  # 分析＆新規投稿案のまとめ
+                item.get("analysis", "")
             ])
             
         worksheet.append_rows(rows)
@@ -116,10 +107,8 @@ def fetch_threads_data(query="AI"):
     posts = []
     
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True,
-            executable_path="/usr/bin/chromium-browser"
-        )
+        # GitHub Actions用に標準インストールのPlaywrightを利用
+        browser = p.chromium.launch(headless=True)
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             locale="ja-JP",
@@ -139,10 +128,7 @@ def fetch_threads_data(query="AI"):
                     break
                 try:
                     text = elem.inner_text() if elem else ""
-                    if not text or len(text) < 5:
-                        continue
-                    
-                    if query not in text or not is_japanese(text):
+                    if not text or len(text) < 5 or query not in text or not is_japanese(text):
                         continue
                     
                     link_elems = elem.query_selector_all('a')
@@ -170,7 +156,7 @@ def fetch_threads_data(query="AI"):
                         "score": 150,
                         "analysis": analysis_result
                     })
-                except Exception as inner_e:
+                except Exception:
                     continue
                     
         except Exception as e:
@@ -189,10 +175,8 @@ def fetch_tiktok_data(hashtag="AI"):
     posts = []
     
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True,
-            executable_path="/usr/bin/chromium-browser"
-        )
+        # GitHub Actions用に標準インストールのPlaywrightを利用
+        browser = p.chromium.launch(headless=True)
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             locale="ja-JP",
@@ -235,7 +219,7 @@ def fetch_tiktok_data(hashtag="AI"):
                         "score": 150,
                         "analysis": analysis_result
                     })
-                except Exception as inner_e:
+                except Exception:
                     continue
                     
         except Exception as e:
@@ -258,4 +242,32 @@ def send_discord_notification(posts):
             "title": f"【{post['platform']}】#{post['keyword']} バズ投稿＆新規原稿案",
             "url": post['url'],
             "description": f"**元投稿:** {post['title_text']}\n\n**🤖 Gemini分析＆新規投稿案:**\n{post['analysis']}",
-            "
+            "color": 3447003
+        }
+        payload = {"embeds": [embed]}
+        try:
+            requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
+        except Exception as e:
+            print(f"Discord通知エラー: {e}")
+
+# ---------------------------------------------------------
+# メイン実行処理
+# ---------------------------------------------------------
+if __name__ == "__main__":
+    all_threads_posts = []
+    all_tiktok_posts = []
+    
+    for kw in SEARCH_KEYWORDS:
+        threads_posts = fetch_threads_data(kw)
+        all_threads_posts.extend(threads_posts)
+        
+        tiktok_posts = fetch_tiktok_data(kw)
+        all_tiktok_posts.extend(tiktok_posts)
+    
+    if all_threads_posts:
+        save_to_google_sheet(all_threads_posts, sheet_name="Threads")
+        send_discord_notification(all_threads_posts)
+        
+    if all_tiktok_posts:
+        save_to_google_sheet(all_tiktok_posts, sheet_name="TikTok")
+        send_discord_notification(all_tiktok_posts)
