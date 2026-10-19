@@ -26,5 +26,6 @@ jobs:
           SPREADSHEET_KEY: ${{ secrets.SPREADSHEET_KEY }}
           GCP_SA_KEY_JSON: ${{ secrets.GCP_SA_KEY_JSON }}
           THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           python main.py
