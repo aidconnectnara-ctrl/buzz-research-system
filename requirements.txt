@@ -1,6 +1,7 @@
-requests
+streamlit
+playwright
 gspread
 oauth2client
-playwright
-pydantic
+requests
 google-genai
+pydantic
