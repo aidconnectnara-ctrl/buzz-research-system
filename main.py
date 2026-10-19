@@ -22,21 +22,41 @@ SEARCH_KEYWORDS = ["AI", "副業", "自動化"]
 # 安全なブラウザ起動関数（自動判定ロジック）
 # ---------------------------------------------------------
 def launch_safe_browser(p):
-    """
-    Streamlit Cloud環境（/usr/bin/chromium-browserが存在する環境）ではシステム版を使用し、
-    GitHub Actionsやローカル（存在しない環境）では標準のPlaywrightブラウザに自動フォールバックする
-    """
-    system_chromium_path = "/usr/bin/chromium-browser"
-    
-    if os.path.exists(system_chromium_path):
+    candidates = [
+        os.getenv("CHROMIUM_PATH"),
+        "/usr/bin/chromium",
+        "/usr/bin/chromium-browser",
+    ]
+
+    for browser_path in candidates:
+        if not browser_path:
+            continue
+
+        if not os.path.exists(browser_path):
+            continue
+
         try:
-            print(f"[Info] システム版Chromiumを使用します: {system_chromium_path}")
-            return p.chromium.launch(headless=True, executable_path=system_chromium_path)
+            print(f"[Info] Chromiumを使用します: {browser_path}")
+
+            return p.chromium.launch(
+                headless=True,
+                executable_path=browser_path,
+                args=[
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                ],
+            )
+
         except Exception as e:
-            print(f"[Warning] システム版の起動に失敗したため標準に切り替えます: {e}")
-            
-    print("[Info] 標準のPlaywright Chromiumを使用します")
-    return p.chromium.launch(headless=True)
+            print(f"[Warning] Chromium起動失敗: {browser_path}")
+            print(e)
+
+    raise RuntimeError(
+        "Chromiumが見つかりません。"
+        "packages.txtまたはPlaywrightの設定を確認してください。"
+    )
+
 
 # ---------------------------------------------------------
 # 1. Gemini APIによる投稿分析 ＆ 新規投稿案の生成関数
