@@ -1,4 +1,14 @@
 import os
+import subprocess
+import streamlit as st
+
+# 初回起動時やコンテナ起動時にPlaywrightのChromiumを自動インストール
+try:
+    subprocess.run(["playwright", "install", "chromium"], check=False)
+except Exception as e:
+    print(f"Playwright install warning: {e}")
+
+# --- 以降に既存の app.py のコードが続きます ---import os
 import re
 import json
 import datetime
