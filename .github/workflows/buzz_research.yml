@@ -2,8 +2,8 @@ name: Buzz Research Automation System
 
 on:
   schedule:
-    - cron: '0 0,12 * * *' # 毎日日本時間9時と21時に自動実行
-  workflow_dispatch: # 手動でも動かせるようにする
+    # 毎週 月・水・金曜日の 0:00 UTC（日本時間 朝9:00）に実行
+    - cron: '0 0 * * 1,3,5'
 
 jobs:
   run-scraper:
