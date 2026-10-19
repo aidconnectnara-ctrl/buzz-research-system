@@ -10,6 +10,24 @@ from oauth2client.service_account import ServiceAccountCredentials
 from google import genai
 
 # ---------------------------------------------------------
+# 安全なブラウザ起動関数（自動判定ロジック）
+# ---------------------------------------------------------
+def launch_safe_browser(p):
+    """
+    Streamlit Cloud環境（/usr/bin/chromium-browserが存在する環境）ではシステム版を使用し、
+    ローカルや他環境（存在しない環境）では標準のPlaywrightブラウザに自動フォールバックする
+    """
+    system_chromium_path = "/usr/bin/chromium-browser"
+    
+    if os.path.exists(system_chromium_path):
+        try:
+            return p.chromium.launch(headless=True, executable_path=system_chromium_path)
+        except Exception as e:
+            st.warning(f"システム版Chromiumの起動に失敗したため標準に切り替えます: {e}")
+            
+    return p.chromium.launch(headless=True)
+
+# ---------------------------------------------------------
 # ページ基本設定
 # ---------------------------------------------------------
 st.set_page_config(
@@ -146,11 +164,7 @@ def send_discord_notification(posts, webhook_url):
 def fetch_threads_data(query, max_count, api_key):
     posts = []
     with sync_playwright() as p:
-        # Streamlit Cloud環境用にシステムのChromiumを直接指定
-        browser = p.chromium.launch(
-            headless=True,
-            executable_path="/usr/bin/chromium-browser"
-        )
+        browser = launch_safe_browser(p)
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             locale="ja-JP"
@@ -200,11 +214,7 @@ def fetch_threads_data(query, max_count, api_key):
 def fetch_tiktok_data(hashtag, max_count, api_key):
     posts = []
     with sync_playwright() as p:
-        # Streamlit Cloud環境用にシステムのChromiumを直接指定
-        browser = p.chromium.launch(
-            headless=True,
-            executable_path="/usr/bin/chromium-browser"
-        )
+        browser = launch_safe_browser(p)
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             locale="ja-JP"
