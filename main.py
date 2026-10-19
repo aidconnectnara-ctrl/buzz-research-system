@@ -12,7 +12,8 @@ from google import genai
 # ---------------------------------------------------------
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 SPREADSHEET_KEY = os.getenv("SPREADSHEET_KEY")
-GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
+# どちらのキー名で設定されていても読み込めるようにする
+GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON") or os.getenv("GCP_SA_KEY_JSON")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 SEARCH_KEYWORDS = ["AI", "副業", "自動化"]
@@ -44,8 +45,9 @@ def analyze_post_with_gemini(post_text, platform="Threads"):
 ・応用アイデア: （自分の投稿作成に活かせるポイント）
 """
         
+        # モデル名を最新の gemini-3.8-flash に更新
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.8-flash',
             contents=prompt,
         )
         return response.text.strip()
@@ -56,10 +58,6 @@ def analyze_post_with_gemini(post_text, platform="Threads"):
 # 日本語判定ヘルパー
 def is_japanese(text):
     return bool(re.search(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]', text))
-
-# スコア計算ヘルパー
-def calculate_buzz_score(likes, comments, shares):
-    return (likes * 1) + (comments * 3) + (shares * 5)
 
 # ---------------------------------------------------------
 # 2. Googleスプレッドシート連携
@@ -81,7 +79,6 @@ def save_to_google_sheet(data_list, sheet_name="シート1"):
             worksheet = spreadsheet.worksheet(sheet_name)
         except gspread.exceptions.WorksheetNotFound:
             worksheet = spreadsheet.add_worksheet(title=sheet_name, rows="100", cols="20")
-            # ヘッダーに「Gemini分析結果」を追加
             worksheet.append_row(["日時", "プラットフォーム", "キーワード", "タイトル/本文", "URL", "バズスコア", "Gemini分析結果"])
 
         rows = []
@@ -96,7 +93,7 @@ def save_to_google_sheet(data_list, sheet_name="シート1"):
                 item.get("title_text", ""),
                 item.get("url", ""),
                 item.get("score", 0),
-                item.get("analysis", "")  # Gemini分析結果
+                item.get("analysis", "")
             ])
             
         worksheet.append_rows(rows)
@@ -126,7 +123,6 @@ def fetch_threads_data(query="AI"):
             page.wait_for_timeout(5000)
             
             post_elements = page.query_selector_all('div[data-pressable-container="true"]')
-            print(f"[DEBUG Threads] 検出されたコンテナ数: {len(post_elements)}")
             
             for elem in post_elements:
                 if len(posts) >= 5:
@@ -153,7 +149,6 @@ def fetch_threads_data(query="AI"):
                     if not href.startswith("http"):
                         href = f"https://www.threads.net{href}"
                     
-                    # Gemini APIによる自動分析
                     print(f"[Gemini分析中] Threads: {text[:30]}...")
                     analysis_result = analyze_post_with_gemini(text, platform="Threads")
                     
@@ -166,7 +161,6 @@ def fetch_threads_data(query="AI"):
                         "analysis": analysis_result
                     })
                 except Exception as inner_e:
-                    print(f"[DEBUG Threads] エラー: {inner_e}")
                     continue
                     
         except Exception as e:
@@ -199,7 +193,6 @@ def fetch_tiktok_data(hashtag="AI"):
             page.wait_for_timeout(4000)
             
             video_cards = page.query_selector_all('div[data-e2e="challenge-item"]')
-            print(f"[DEBUG TikTok] 検出された動画カード数: {len(video_cards)}")
             
             for card in video_cards:
                 if len(posts) >= 5:
@@ -218,7 +211,6 @@ def fetch_tiktok_data(hashtag="AI"):
                     if not href.startswith("http"):
                         href = f"https://www.tiktok.com{href}"
                     
-                    # Gemini APIによる自動分析
                     print(f"[Gemini分析中] TikTok: {desc[:30]}...")
                     analysis_result = analyze_post_with_gemini(desc, platform="TikTok")
                     
@@ -231,7 +223,6 @@ def fetch_tiktok_data(hashtag="AI"):
                         "analysis": analysis_result
                     })
                 except Exception as inner_e:
-                    print(f"[DEBUG TikTok] エラー: {inner_e}")
                     continue
                     
         except Exception as e:
@@ -269,7 +260,6 @@ if __name__ == "__main__":
     all_threads_posts = []
     all_tiktok_posts = []
     
-    # 各キーワードで取得・分析
     for kw in SEARCH_KEYWORDS:
         threads_posts = fetch_threads_data(kw)
         all_threads_posts.extend(threads_posts)
@@ -277,7 +267,6 @@ if __name__ == "__main__":
         tiktok_posts = fetch_tiktok_data(kw)
         all_tiktok_posts.extend(tiktok_posts)
     
-    # スプレッドシート保存
     if all_threads_posts:
         save_to_google_sheet(all_threads_posts, sheet_name="Threads")
         send_discord_notification(all_threads_posts)
