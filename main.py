@@ -19,6 +19,26 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 SEARCH_KEYWORDS = ["AI", "副業", "自動化"]
 
 # ---------------------------------------------------------
+# 安全なブラウザ起動関数（自動判定ロジック）
+# ---------------------------------------------------------
+def launch_safe_browser(p):
+    """
+    Streamlit Cloud環境（/usr/bin/chromium-browserが存在する環境）ではシステム版を使用し、
+    GitHub Actionsやローカル（存在しない環境）では標準のPlaywrightブラウザに自動フォールバックする
+    """
+    system_chromium_path = "/usr/bin/chromium-browser"
+    
+    if os.path.exists(system_chromium_path):
+        try:
+            print(f"[Info] システム版Chromiumを使用します: {system_chromium_path}")
+            return p.chromium.launch(headless=True, executable_path=system_chromium_path)
+        except Exception as e:
+            print(f"[Warning] システム版の起動に失敗したため標準に切り替えます: {e}")
+            
+    print("[Info] 標準のPlaywright Chromiumを使用します")
+    return p.chromium.launch(headless=True)
+
+# ---------------------------------------------------------
 # 1. Gemini APIによる投稿分析 ＆ 新規投稿案の生成関数
 # ---------------------------------------------------------
 def analyze_and_generate_post(post_text, platform="Threads", keyword="AI"):
@@ -107,8 +127,7 @@ def fetch_threads_data(query="AI"):
     posts = []
     
     with sync_playwright() as p:
-        # GitHub Actions用に標準インストールのPlaywrightを利用
-        browser = p.chromium.launch(headless=True)
+        browser = launch_safe_browser(p)
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             locale="ja-JP",
@@ -175,8 +194,7 @@ def fetch_tiktok_data(hashtag="AI"):
     posts = []
     
     with sync_playwright() as p:
-        # GitHub Actions用に標準インストールのPlaywrightを利用
-        browser = p.chromium.launch(headless=True)
+        browser = launch_safe_browser(p)
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             locale="ja-JP",
