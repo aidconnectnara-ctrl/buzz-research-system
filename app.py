@@ -167,7 +167,10 @@ def send_discord_notification(posts, webhook_url):
 def fetch_threads_data(query, max_count, api_key):
     posts = []
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+      browser = p.chromium.launch(
+            headless=True,
+            executable_path="/usr/bin/chromium-browser"
+        )
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             locale="ja-JP"
