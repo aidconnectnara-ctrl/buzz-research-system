@@ -2,16 +2,17 @@ import os
 import subprocess
 import streamlit as st
 
+# Streamlit Cloudのキャッシュディレクトリ環境に合わせてPlaywrightのパスを固定
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/home/adminuser/.cache/ms-playwright"
+
 @st.cache_resource
 def install_playwright():
     try:
-        # pipで入れたplaywrightのCLIを使ってchromiumをインストール
+        # Chromiumとその依存関係を明示的にインストール
         subprocess.run(["playwright", "install", "chromium"], check=True)
-        subprocess.run(["playwright", "install-deps", "chromium"], check=True) # システム依存の補完
     except Exception as e:
-        print(f"Playwright installation info: {e}")
+        print(f"Playwright install info: {e}")
 
-# アプリ起動時に一度だけインストールを実行
 install_playwright()
 
 # --- 以降に既存の app.py のコードが続きます ---
