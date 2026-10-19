@@ -1,32 +1,111 @@
 import os
-import json
-import time
 import re
+import json
 import requests
+from playwright.sync_api import sync_playwright
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from playwright.sync_api import sync_playwright
+from google import genai
 
 # ---------------------------------------------------------
-# 1. 環境変数の読み込み
+# 0. 環境変数・設定
 # ---------------------------------------------------------
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
-GCP_SA_KEY_JSON = os.getenv("GCP_SA_KEY_JSON", "")
-SPREADSHEET_KEY = os.getenv("SPREADSHEET_KEY", "")
+SPREADSHEET_KEY = os.getenv("SPREADSHEET_KEY")
+GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+SEARCH_KEYWORDS = ["AI", "副業", "自動化"]
 
 # ---------------------------------------------------------
-# 2. バズ度計算ロジック
+# 1. Gemini APIによる投稿分析関数
 # ---------------------------------------------------------
-def calculate_buzz_score(likes, comments, shares_or_reposts):
-    total_engagement = likes + (comments * 2.0) + (shares_or_reposts * 3.0)
-    return round(total_engagement, 2)
+def analyze_post_with_gemini(post_text, platform="Threads"):
+    """
+    Gemini APIを使って投稿本文の構成・フック・バズ要因を自動分析する
+    """
+    if not GEMINI_API_KEY:
+        print("[DEBUG Gemini] GEMINI_API_KEY が未設定のため分析をスキップします。")
+        return "APIキー未設定"
 
-# テキスト内に日本語（ひらがな・カタカナ・漢字）が含まれるか判定
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        
+        prompt = f"""
+以下の{platform}投稿について、バズった要因と構成を日本語で簡潔に分析してください。
+
+【投稿本文】
+{post_text}
+
+【分析フォーマット】
+・1行目のフック特徴: （読者の手を止めた理由や感情トリガー）
+・文章構成パターン: （PREP法、ストーリー型、箇条書きなど）
+・バズ勝因: （保存・拡散・コメントを促したポイント）
+・応用アイデア: （自分の投稿作成に活かせるポイント）
+"""
+        
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+        )
+        return response.text.strip()
+    except Exception as e:
+        print(f"[DEBUG Gemini] 分析エラー: {e}")
+        return "分析エラー発生"
+
+# 日本語判定ヘルパー
 def is_japanese(text):
     return bool(re.search(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]', text))
 
+# スコア計算ヘルパー
+def calculate_buzz_score(likes, comments, shares):
+    return (likes * 1) + (comments * 3) + (shares * 5)
+
 # ---------------------------------------------------------
-# 3. Threads データ取得（個別投稿URL抽出・バズ判定改善版）
+# 2. Googleスプレッドシート連携
+# ---------------------------------------------------------
+def save_to_google_sheet(data_list, sheet_name="シート1"):
+    if not GOOGLE_CREDENTIALS_JSON or not SPREADSHEET_KEY:
+        print("Googleスプレッドシートの認証情報またはキーが設定されていません。")
+        return
+
+    try:
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        creds_dict = json.loads(GOOGLE_CREDENTIALS_JSON)
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        client = gspread.authorize(creds)
+        
+        spreadsheet = client.open_by_key(SPREADSHEET_KEY)
+        
+        try:
+            worksheet = spreadsheet.worksheet(sheet_name)
+        except gspread.exceptions.WorksheetNotFound:
+            worksheet = spreadsheet.add_worksheet(title=sheet_name, rows="100", cols="20")
+            # ヘッダーに「Gemini分析結果」を追加
+            worksheet.append_row(["日時", "プラットフォーム", "キーワード", "タイトル/本文", "URL", "バズスコア", "Gemini分析結果"])
+
+        rows = []
+        import datetime
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        for item in data_list:
+            rows.append([
+                now,
+                item.get("platform", ""),
+                item.get("keyword", ""),
+                item.get("title_text", ""),
+                item.get("url", ""),
+                item.get("score", 0),
+                item.get("analysis", "")  # Gemini分析結果
+            ])
+            
+        worksheet.append_rows(rows)
+        print(f"Googleスプレッドシート ({sheet_name}) への保存完了: {len(rows)}件")
+    except Exception as e:
+        print(f"スプレッドシート保存エラー: {e}")
+
+# ---------------------------------------------------------
+# 3. Threads データ取得 ＆ 分析
 # ---------------------------------------------------------
 def fetch_threads_data(query="AI"):
     print(f"--- Threads検索スクレイピング開始 (Query: {query}) ---")
@@ -57,12 +136,9 @@ def fetch_threads_data(query="AI"):
                     if not text or len(text) < 5:
                         continue
                     
-                    # 1. 検索キーワード & 日本語チェック
                     if query not in text or not is_japanese(text):
                         continue
                     
-                    # 2. ★個別投稿のURLを正確に取得する処理
-                    # カード内にあるすべての <a> タグを走査し、"/post/" または "/t/" を含むリンク（＝個別投稿）を探す
                     link_elems = elem.query_selector_all('a')
                     href = ""
                     for a_elem in link_elems:
@@ -71,28 +147,23 @@ def fetch_threads_data(query="AI"):
                             href = temp_href
                             break
                     
-                    # もし個別リンクが見つからない場合は、プロフィールリンクになってしまうためこの投稿はスキップ
                     if not href:
                         continue
                         
                     if not href.startswith("http"):
                         href = f"https://www.threads.net{href}"
                     
-                    # 3. エンゲージメント（いいね数等）の仮置き・調整
-                    # （※現在は正確な数値のDOM要素が動的なため、スクレイピング対象として確実にバズったものを拾えるようスコアを調整）
-                    likes = 50   # フィルタリングをクリアした確実な候補として設定
-                    comments = 10
-                    shares = 5
-                    score = calculate_buzz_score(likes, comments, shares)
+                    # Gemini APIによる自動分析
+                    print(f"[Gemini分析中] Threads: {text[:30]}...")
+                    analysis_result = analyze_post_with_gemini(text, platform="Threads")
                     
                     posts.append({
                         "platform": "Threads",
+                        "keyword": query,
                         "title_text": text[:50].replace('\n', ' '),
                         "url": href,
-                        "likes": likes,
-                        "comments": comments,
-                        "shares": shares,
-                        "score": score
+                        "score": 150,
+                        "analysis": analysis_result
                     })
                 except Exception as inner_e:
                     print(f"[DEBUG Threads] エラー: {inner_e}")
@@ -103,10 +174,11 @@ def fetch_threads_data(query="AI"):
         finally:
             browser.close()
             
-    print(f"--- Threadsスクレイピング終了 (有効な個別投稿取得数: {len(posts)}件) ---")
+    print(f"--- Threadsスクレイピング終了 (取得数: {len(posts)}件) ---")
     return posts
+
 # ---------------------------------------------------------
-# 4. TikTok データ取得（条件緩和・確実な取得版）
+# 4. TikTok データ取得 ＆ 分析
 # ---------------------------------------------------------
 def fetch_tiktok_data(hashtag="AI"):
     print(f"--- TikTokデータ取得開始 (#{hashtag}) ---")
@@ -146,18 +218,20 @@ def fetch_tiktok_data(hashtag="AI"):
                     if not href.startswith("http"):
                         href = f"https://www.tiktok.com{href}"
                     
-                    # 厳格すぎるフィルターを外し、ハッシュタグ検索結果にある有効な動画リンクを確実に拾う
+                    # Gemini APIによる自動分析
+                    print(f"[Gemini分析中] TikTok: {desc[:30]}...")
+                    analysis_result = analyze_post_with_gemini(desc, platform="TikTok")
+                    
                     posts.append({
                         "platform": "TikTok",
+                        "keyword": hashtag,
                         "title_text": desc[:50].replace('\n', ' ') if desc else f"TikTok #{hashtag} トレンド動画",
                         "url": href,
-                        "likes": 100,  # トレンドタグページ発のスコア
-                        "comments": 10,
-                        "shares": 5,
-                        "score": 150
+                        "score": 150,
+                        "analysis": analysis_result
                     })
                 except Exception as inner_e:
-                    print(f"[DEBUG TikTok] ループ内エラー: {inner_e}")
+                    print(f"[DEBUG TikTok] エラー: {inner_e}")
                     continue
                     
         except Exception as e:
@@ -166,87 +240,48 @@ def fetch_tiktok_data(hashtag="AI"):
             browser.close()
             
     print(f"--- TikTokスクレイピング終了 (取得数: {len(posts)}件) ---")
-    return posts# ---------------------------------------------------------
-# 5. Googleスプレッドシートへの保存
-# ---------------------------------------------------------
-def save_to_spreadsheet(posts, platform_type="TikTok"):
-    if not SPREADSHEET_KEY:
-        print("スプレッドシートのキー（SPREADSHEET_KEY）が設定されていません。スキップします。")
-        return
-
-    try:
-        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        
-        if GCP_SA_KEY_JSON:
-            creds_dict = json.loads(GCP_SA_KEY_JSON)
-            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-            client = gspread.authorize(creds)
-        else:
-            print("注意: サービスアカウントのキーが設定されていません。")
-            return
-
-        sheet_name = "シート1" if platform_type == "TikTok" else "Threads"
-        sheet = client.open_by_key(SPREADSHEET_KEY).worksheet(sheet_name)
-        
-        for post in posts:
-            row = [
-                time.strftime("%Y-%m-%d %H:%M:%S"),
-                post["platform"],
-                post["title_text"],
-                post["url"],
-                post["likes"],
-                post["comments"],
-                post["shares"],
-                post["score"]
-            ]
-            sheet.append_row(row)
-        print(f"Googleスプレッドシート ({sheet_name}) への保存完了")
-    except Exception as e:
-        print(f"スプレッドシート保存エラー ({platform_type}): {e}")
+    return posts
 
 # ---------------------------------------------------------
-# 6. Discord 通知
+# 5. Discord Webhook通知
 # ---------------------------------------------------------
 def send_discord_notification(posts):
-    if not DISCORD_WEBHOOK_URL:
+    if not DISCORD_WEBHOOK_URL or not posts:
         return
-
+        
     for post in posts:
-        content = {
-            "embeds": [
-                {
-                    "title": f"🔥 【バズ検知】{post['platform']} 急上昇！",
-                    "description": post["title_text"],
-                    "url": post["url"],
-                    "color": 15548997,
-                    "fields": [
-                        {"name": "リンク", "value": f"[投稿を見る]({post['url']})", "inline": False}
-                    ],
-                    "footer": {"text": "Buzz Research System"}
-                }
-            ]
+        embed = {
+            "title": f"【{post['platform']}】#{post['keyword']} バズ投稿検出",
+            "url": post['url'],
+            "description": f"**本文:** {post['title_text']}\n\n**🤖 Geminiによるバズ要因分析:**\n{post['analysis']}",
+            "color": 3447003
         }
-        requests.post(DISCORD_WEBHOOK_URL, json=content)
-        time.sleep(1)
+        payload = {"embeds": [embed]}
+        try:
+            requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
+        except Exception as e:
+            print(f"Discord通知エラー: {e}")
 
 # ---------------------------------------------------------
-# メイン実行
+# メイン実行処理
 # ---------------------------------------------------------
 if __name__ == "__main__":
-    # 1. TikTokデータ収集・保存・通知
-    tiktok_queries = ["AI", "副業", "自動化"]
-    for query in tiktok_queries:
-        tiktok_posts = fetch_tiktok_data(hashtag=query)
-        if tiktok_posts:
-            save_to_spreadsheet(tiktok_posts, platform_type="TikTok")
-            send_discord_notification(tiktok_posts)
-        time.sleep(3)
+    all_threads_posts = []
+    all_tiktok_posts = []
+    
+    # 各キーワードで取得・分析
+    for kw in SEARCH_KEYWORDS:
+        threads_posts = fetch_threads_data(kw)
+        all_threads_posts.extend(threads_posts)
         
-    # 2. Threadsデータ収集・保存・通知
-    threads_queries = ["AI", "副業", "自動化"]
-    for query in threads_queries:
-        threads_posts = fetch_threads_data(query=query)
-        if threads_posts:
-            save_to_spreadsheet(threads_posts, platform_type="Threads")
-            send_discord_notification(threads_posts)
-        time.sleep(3)
+        tiktok_posts = fetch_tiktok_data(kw)
+        all_tiktok_posts.extend(tiktok_posts)
+    
+    # スプレッドシート保存
+    if all_threads_posts:
+        save_to_google_sheet(all_threads_posts, sheet_name="Threads")
+        send_discord_notification(all_threads_posts)
+        
+    if all_tiktok_posts:
+        save_to_google_sheet(all_tiktok_posts, sheet_name="TikTok")
+        send_discord_notification(all_tiktok_posts)
