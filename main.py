@@ -50,7 +50,7 @@ def analyze_and_generate_post(post_text, platform="Threads", keyword="AI"):
 """
         
         response = client.models.generate_content(
-            model='gemini-3.8-flash',
+            model='gemini-2.5-flash',
             contents=prompt,
         )
         
@@ -116,7 +116,10 @@ def fetch_threads_data(query="AI"):
     posts = []
     
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(
+            headless=True,
+            executable_path="/usr/bin/chromium-browser"
+        )
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             locale="ja-JP",
@@ -186,7 +189,10 @@ def fetch_tiktok_data(hashtag="AI"):
     posts = []
     
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(
+            headless=True,
+            executable_path="/usr/bin/chromium-browser"
+        )
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             locale="ja-JP",
@@ -252,32 +258,4 @@ def send_discord_notification(posts):
             "title": f"【{post['platform']}】#{post['keyword']} バズ投稿＆新規原稿案",
             "url": post['url'],
             "description": f"**元投稿:** {post['title_text']}\n\n**🤖 Gemini分析＆新規投稿案:**\n{post['analysis']}",
-            "color": 3447003
-        }
-        payload = {"embeds": [embed]}
-        try:
-            requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
-        except Exception as e:
-            print(f"Discord通知エラー: {e}")
-
-# ---------------------------------------------------------
-# メイン実行処理
-# ---------------------------------------------------------
-if __name__ == "__main__":
-    all_threads_posts = []
-    all_tiktok_posts = []
-    
-    for kw in SEARCH_KEYWORDS:
-        threads_posts = fetch_threads_data(kw)
-        all_threads_posts.extend(threads_posts)
-        
-        tiktok_posts = fetch_tiktok_data(kw)
-        all_tiktok_posts.extend(tiktok_posts)
-    
-    if all_threads_posts:
-        save_to_google_sheet(all_threads_posts, sheet_name="Threads")
-        send_discord_notification(all_threads_posts)
-        
-    if all_tiktok_posts:
-        save_to_google_sheet(all_tiktok_posts, sheet_name="TikTok")
-        send_discord_notification(all_tiktok_posts)
+            "
