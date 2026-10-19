@@ -1,39 +1,4 @@
 import os
-import subprocess
-import streamlit as st
-
-# Streamlit Cloudの環境に合わせ、Playwrightのブラウザ保存先を明示的に指定
-os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/home/adminuser/.cache/ms-playwright"
-
-@st.cache_resource
-def install_playwright():
-    try:
-        # 初回起動時にchromiumを確実にインストール
-        subprocess.run(["playwright", "install", "chromium"], check=True)
-    except Exception as e:
-        print(f"Playwright install info: {e}")
-
-install_playwright()
-
-# --- 以降に通常の app.py のコードが続きます ---
-import os
-import subprocess
-import streamlit as st
-
-# Streamlit Cloudのキャッシュディレクトリ環境に合わせてPlaywrightのパスを固定
-os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/home/adminuser/.cache/ms-playwright"
-
-@st.cache_resource
-def install_playwright():
-    try:
-        # Chromiumとその依存関係を明示的にインストール
-        subprocess.run(["playwright", "install", "chromium"], check=True)
-    except Exception as e:
-        print(f"Playwright install info: {e}")
-
-install_playwright()
-
-# --- 以降に既存の app.py のコードが続きます ---
 import re
 import json
 import datetime
@@ -61,7 +26,6 @@ st.caption("Threads / TikTok のトレンド投稿をスクレイピングし、
 # ---------------------------------------------------------
 st.sidebar.header("⚙️ リサーチ ＆ フィルタ設定")
 
-# APIキー・認証情報設定（環境変数またはUI入力）
 env_gemini_key = os.getenv("GEMINI_API_KEY", "")
 env_discord_url = os.getenv("DISCORD_WEBHOOK_URL", "")
 env_sheet_key = os.getenv("SPREADSHEET_KEY", "")
@@ -76,18 +40,15 @@ with st.sidebar.expander("🔑 APIキー / 連携設定", expanded=not bool(env_
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔍 検索・条件設定")
 
-# 検索キーワード設定
 keywords_input = st.sidebar.text_input("検索キーワード/ハッシュタグ（カンマ区切り）", value="AI, 副業, 自動化")
 keywords = [k.strip() for k in keywords_input.split(",") if k.strip()]
 
-# 対象プラットフォーム
 target_platforms = st.sidebar.multiselect(
     "対象プラットフォーム",
     ["Threads", "TikTok"],
     default=["Threads", "TikTok"]
 )
 
-# 取得上限件数
 max_posts_per_kw = st.sidebar.slider("1キーワードあたりの取得件数", min_value=1, max_value=20, value=5)
 
 st.sidebar.markdown("---")
@@ -123,7 +84,7 @@ def analyze_and_generate_post(post_text, platform, keyword, api_key):
 ・アクション促進（保存・コメント誘導など）: 
 """
         response = client.models.generate_content(
-            model='gemini-3.8-flash',
+            model='gemini-2.5-flash',
             contents=prompt,
         )
         return response.text.strip()
@@ -185,7 +146,8 @@ def send_discord_notification(posts, webhook_url):
 def fetch_threads_data(query, max_count, api_key):
     posts = []
     with sync_playwright() as p:
-      browser = p.chromium.launch(
+        # Streamlit Cloud環境用にシステムのChromiumを直接指定
+        browser = p.chromium.launch(
             headless=True,
             executable_path="/usr/bin/chromium-browser"
         )
@@ -238,7 +200,11 @@ def fetch_threads_data(query, max_count, api_key):
 def fetch_tiktok_data(hashtag, max_count, api_key):
     posts = []
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        # Streamlit Cloud環境用にシステムのChromiumを直接指定
+        browser = p.chromium.launch(
+            headless=True,
+            executable_path="/usr/bin/chromium-browser"
+        )
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             locale="ja-JP"
@@ -291,7 +257,7 @@ with col1:
     st.write(f"- **バズ判定フィルタ:** 最小いいね数 {min_likes} / 最小コメント数 {min_comments} / 最小フォロワー数 {min_followers}")
 
 with col2:
-    st.markdown("<br>", unsafe_allow_dict_content=True)
+    st.markdown("<br>", unsafe_allow_html=True)
     run_button = st.button("🚀 リサーチ ＆ 分析を開始", type="primary", use_container_width=True)
 
 if run_button:
@@ -349,7 +315,6 @@ if "results" in st.session_state and st.session_state["results"]:
     results = st.session_state["results"]
     st.success(f"合計 {len(results)} 件のバズ投稿を取得・分析しました。")
     
-    # フィルター表示タブ
     tab_all, tab_threads, tab_tiktok = st.tabs(["全件表示", "Threads", "TikTok"])
     
     def render_cards(data_list):
