@@ -11,15 +11,18 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from google import genai
 
-
 # ---------------------------------------------------------
-# ページ基本設定
+# ページ基本設定（※必ず他のst.xxxより一番最初に置く）
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="SNSバズリサーチ ＆ Gemini自動分析ダッシュボード",
     page_icon="🚀",
-    layout="wide",
+    layout="wide"
 )
+
+# ページタイトルなどの描画
+st.title("🚀 SNSバズリサーチ ＆ Gemini自動分析ダッシュボード")
+st.caption("Threads / TikTok のトレンド投稿をスクレイピングし、Gemini APIで勝因分析 ＆ 新規投稿案を自動生成します。")
 
 
 # ---------------------------------------------------------
