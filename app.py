@@ -22,7 +22,10 @@ st.set_page_config(
 
 # ページタイトルなどの描画
 st.title("🚀 SNSバズリサーチ ＆ Gemini自動分析ダッシュボード")
-st.caption("Threads / TikTok のトレンド投稿をスクレイピングし、Gemini APIで勝因分析 ＆ 新規投稿案を自動生成します。")
+st.caption(
+    "Threads / TikTok のトレンド投稿をスクレイピングし、"
+    "Gemini APIで勝因分析 ＆ 新規投稿案を自動生成します。"
+)
 
 
 # ---------------------------------------------------------
@@ -38,7 +41,6 @@ def get_secret(name, default=""):
             if str(value).strip():
                 return str(value)
     except Exception:
-        # ローカル環境でSecretsがない場合などは環境変数へ進む
         pass
 
     return os.getenv(name, default)
@@ -57,11 +59,6 @@ env_creds_json = (
 # 安全なブラウザ起動関数
 # ---------------------------------------------------------
 def launch_safe_browser(p):
-    """システムにインストールされたChromiumを探して起動する。
-
-    Playwright管理ブラウザへの無条件フォールバックは行わない。
-    これにより、Chromium未インストール時に原因が分かりやすくなる。
-    """
     candidates = [
         os.getenv("CHROMIUM_PATH"),
         shutil.which("chromium"),
@@ -401,12 +398,6 @@ def fetch_tiktok_data(hashtag, max_count, api_key):
 # ---------------------------------------------------------
 # 画面表示
 # ---------------------------------------------------------
-st.title("🚀 SNSバズリサーチ ＆ Gemini自動分析ダッシュボード")
-st.caption(
-    "Threads / TikTok のトレンド投稿をスクレイピングし、"
-    "Gemini APIで勝因分析 ＆ 新規投稿案を自動生成します。"
-)
-
 st.sidebar.header("⚙️ リサーチ ＆ フィルタ設定")
 
 with st.sidebar.expander(
