@@ -12,13 +12,15 @@ st.set_page_config(
     layout="wide"
 )
 
-# 1. Streamlit Secretsからの認証情報読み込み（エラーハンドリング付き）
+# 1. Streamlit Secretsからの認証情報読み込み
 try:
     GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
     THREADS_ACCESS_TOKEN = st.secrets["THREADS_ACCESS_TOKEN"]
     SPREADSHEET_KEY = st.secrets["SPREADSHEET_KEY"]
     DISCORD_WEBHOOK_URL = st.secrets["DISCORD_WEBHOOK_URL"]
-    GCP_SA_KEY_JSON = dict(st.secrets["GCP_SA_KEY_JSON"])
+    
+    # dict() を外してそのまま取得する
+    GCP_SA_KEY_JSON = st.secrets["GCP_SA_KEY_JSON"]
     
     # Gemini APIの初期設定
     genai.configure(api_key=GEMINI_API_KEY)
