@@ -1,7 +1,6 @@
 streamlit
-playwright
+pandas
+google-generativeai
+google-auth
 gspread
-oauth2client
 requests
-google-genai
-pydantic
