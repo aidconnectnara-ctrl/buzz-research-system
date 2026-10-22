@@ -89,7 +89,7 @@ if research_button:
         """
         
         try:
-            model = genai.GenerativeModel("gemini-2.5-flash")
+            model = genai.GenerativeModel("gemini-3.8-flash")
             response = model.generate_content(prompt)
             st.info(response.text)
         except Exception as e:
