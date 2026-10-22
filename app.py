@@ -40,7 +40,7 @@ platform = st.sidebar.selectbox(
     ["Threads", "TikTok"]
 )
 
-hashtag = st.sidebar.text_input("ハッシュタグ（例: #ガソリン代 または ガソリン）", value="#ガソリン代")
+hashtag = st.sidebar.text_input("ハッシュタグ（例: #AI または 副業）", value="#AI副業")
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🎛️ 抽出フィルター制限")
@@ -56,12 +56,12 @@ if research_button:
         
         # --- [データ取得ロジックのプレースホルダー / サンプルデータ] ---
         # ※実際のAPIやスクレイピング結果をここに組み込むことで、完全自動化が可能です。
-        raw_data = [
-            {"post_id": 1, "author": "user_alpha", "content": f"{hashtag}の高騰が家計を直撃。今すぐできる節約術3選！", "views": 15000, "followers": 3200, "likes": 1200},
-            {"post_id": 2, "author": "user_beta", "content": f"{hashtag}対策としてガソリンスタンドのアプリ割を徹底解説", "views": 8500, "followers": 800, "likes": 450},
-            {"post_id": 3, "author": "user_gamma", "content": f"{hashtag}に関する政府の補助金最新情報まとめ。知らないと損", "views": 32000, "followers": 15000, "likes": 4100},
-            {"post_id": 4, "author": "user_delta", "content": f"{hashtag}って最近よく聞くけどみんなどうしてる？", "views": 400, "followers": 150, "likes": 10},
-            {"post_id": 5, "author": "user_epsilon", "content": f"{hashtag}の裏技テクニック。この方法で月数千円浮きます", "views": 2100, "followers": 400, "likes": 120},
+      raw_data = [
+            {"post_id": 1, "author": "user_alpha", "content": f"{hashtag}を活用した完全自動化で月5万円の副収入を得る方法", "views": 18000, "followers": 4100, "likes": 1500},
+            {"post_id": 2, "author": "user_beta", "content": f"{hashtag}初心者必見！プログラミング未経験でも始められるAI副業のステップ", "views": 9200, "followers": 950, "likes": 520},
+            {"post_id": 3, "author": "user_gamma", "content": f"{hashtag}を使った業務効率化ツール作成術。作業時間が1/10になる裏技", "views": 35000, "followers": 16200, "likes": 4800},
+            {"post_id": 4, "author": "user_delta", "content": f"{hashtag}って本当に稼げるの？実際に試してみた結果", "views": 450, "followers": 180, "likes": 15},
+            {"post_id": 5, "author": "user_epsilon", "content": f"{hashtag}で今すぐ使えるプロンプト集。これコピペするだけでOKです", "views": 3100, "followers": 600, "likes": 210},
         ]
         df = pd.DataFrame(raw_data)
         
