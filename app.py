@@ -54,24 +54,19 @@ research_button = st.sidebar.button("リサーチ実行 🚀", type="primary")
 if research_button:
     with st.spinner(f"【{platform}】の「{hashtag}」データをリサーチ・分析中..."):
         
-# 3. リサーチ実行時のメイン処理
-    if research_button:
-        with st.spinner(f"【{platform}】の「{hashtag}」データをリサーチ・分析中..."):
-            
-            # --- サンプルデータ ---
-            raw_data = [
-                {"post_id": 1, "author": "user_alpha", "content": f"{hashtag}を活用した完全自動化で月5万円の副収入を得る方法", "views": 18000, "followers": 4100, "likes": 1500},
-                {"post_id": 2, "author": "user_beta", "content": f"{hashtag}初心者必見！プログラミング未経験でも始められるAI副業のステップ", "views": 9200, "followers": 950, "likes": 520},
-                {"post_id": 3, "author": "user_gamma", "content": f"{hashtag}を使った業務効率化ツール作成術。作業時間が1/10になる裏技", "views": 35000, "followers": 16200, "likes": 4800},
-                {"post_id": 4, "author": "user_delta", "content": f"{hashtag}って本当に稼げるの？実際に試してみた結果", "views": 450, "followers": 180, "likes": 15},
-                {"post_id": 5, "author": "user_epsilon", "content": f"{hashtag}で今すぐ使えるプロンプト集。これコピペするだけでOKです", "views": 3100, "followers": 600, "likes": 210},
-            ]
-            df = pd.DataFrame(raw_data)
-            
-            # 4. フィルター制限の適用（最小アクセス数 ＆ 最小フォロワー数）
-            filtered_df = df[(df["views"] >= min_views) & (df["followers"] >= min_followers)]
-            filtered_df = filtered_df.sort_values(by="views", ascending=False).reset_index(drop=True)
-
+        # --- サンプルデータ ---
+        raw_data = [
+            {"post_id": 1, "author": "user_alpha", "content": f"{hashtag}を活用した完全自動化で月5万円の副収入を得る方法", "views": 18000, "followers": 4100, "likes": 1500},
+            {"post_id": 2, "author": "user_beta", "content": f"{hashtag}初心者必見！プログラミング未経験でも始められるAI副業のステップ", "views": 9200, "followers": 950, "likes": 520},
+            {"post_id": 3, "author": "user_gamma", "content": f"{hashtag}を使った業務効率化ツール作成術。作業時間が1/10になる裏技", "views": 35000, "followers": 16200, "likes": 4800},
+            {"post_id": 4, "author": "user_delta", "content": f"{hashtag}って本当に稼げるの？実際に試してみた結果", "views": 450, "followers": 180, "likes": 15},
+            {"post_id": 5, "author": "user_epsilon", "content": f"{hashtag}で今すぐ使えるプロンプト集。これコピペするだけでOKです", "views": 3100, "followers": 600, "likes": 210},
+        ]
+        df = pd.DataFrame(raw_data)
+        
+        # 4. フィルター制限の適用（最小アクセス数 ＆ 最小フォロワー数）
+        filtered_df = df[(df["views"] >= min_views) & (df["followers"] >= min_followers)]
+        filtered_df = filtered_df.sort_values(by="views", ascending=False).reset_index(drop=True)
     st.success(f"リサーチ完了！条件に一致する投稿が {len(filtered_df)} 件見つしました。")
 
     if len(filtered_df) > 0:
